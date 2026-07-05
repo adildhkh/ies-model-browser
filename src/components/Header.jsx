@@ -5,7 +5,12 @@ export default function Header() {
         <div className="app-logo">⚡</div>
         <div>
           <div className="app-title">Process Engineering Model Browser</div>
-          <div className="app-subtitle">IES · Intelligent Engineering Solutions</div>
+          <a
+            href="https://ies-solutions.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="app-subtitle app-subtitle-link"
+          >IES · Intelligent Engineering Solutions</a>
         </div>
       </div>
       <div className="app-tagline">

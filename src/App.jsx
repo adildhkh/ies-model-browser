@@ -171,7 +171,10 @@ export default function App() {
       </div>
 
       <div className="app-footer">
-        Data sourced live from openrouter.ai/api/v1/models · IES – Intelligent Engineering Solutions
+        Data sourced live from openrouter.ai/api/v1/models · Built by{" "}
+        <a href="https://ies-solutions.org" target="_blank" rel="noopener noreferrer" className="app-footer-link">
+          IES · Intelligent Engineering Solutions →
+        </a>
       </div>
 
       <CompareBar
