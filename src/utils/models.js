@@ -36,66 +36,77 @@
 export const TASK_PROFILES = {
   "Feasibility Study": {
     minContext: 100000,
+    contextNote: "Whole-plant scope, options, and economic cases — multiple chapters of background in one session.",
     generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
     review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.3 },
     blend: { capability: 0.45, context: 0.30, price: 0.25 },
   },
   "Pre-FEED Options Study": {
     minContext: 128000,
+    contextNote: "Several design options with material balances and high-level equipment — more cases to compare than a single BFD.",
     generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.5 },
     review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
     blend: { capability: 0.45, context: 0.35, price: 0.20 },
   },
   "Design Basis": {
     minContext: 64000,
+    contextNote: "Structured design criteria and limits — long but more tabular than a full study report.",
     generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.8 },
     review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.4 },
     blend: { capability: 0.5, context: 0.25, price: 0.25 },
   },
   "Block Flow Diagram (BFD)": {
     minContext: 32000,
+    contextNote: "Block-level only — major units and interconnections; a short process synopsis and block list is usually enough.",
     generate: { reasoning: 0.3, vision: 0, structuredOutputs: 0.6, requiresImage: true },
     review: { reasoning: 0.5, vision: 1.0, structuredOutputs: 0.2 },
     blend: { capability: 0.35, context: 0.15, price: 0.50 },
   },
   "PFD": {
     minContext: 64000,
+    contextNote: "Equipment and stream detail — stream table, duties, and utilities; roughly 2× the information density of a BFD.",
     generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.7, requiresImage: true },
     review: { reasoning: 0.7, vision: 1.0, structuredOutputs: 0.3 },
     blend: { capability: 0.45, context: 0.25, price: 0.30 },
   },
   "P&ID": {
     minContext: 128000,
+    contextNote: "Tag-level detail — line lists, instrument indexes, and valve data; the densest drawing and the heaviest supporting documents.",
     generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.9, requiresImage: true },
     review: { reasoning: 0.8, vision: 1.0, structuredOutputs: 0.4 },
     blend: { capability: 0.5, context: 0.30, price: 0.20 },
   },
   "Process Data Sheet": {
     minContext: 32000,
+    contextNote: "One equipment item per sheet — focused prompts; little need for plant-wide context.",
     generate: { reasoning: 0.2, vision: 0, structuredOutputs: 1.0 },
     review: { reasoning: 0.4, vision: 0, structuredOutputs: 0.6 },
     blend: { capability: 0.35, context: 0.15, price: 0.50 },
   },
   "Process Philosophies": {
     minContext: 64000,
+    contextNote: "Narrative design rules across several philosophy documents — moderate length, cross-referenced.",
     generate: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
     review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
     blend: { capability: 0.45, context: 0.25, price: 0.30 },
   },
   "Operating Manual": {
     minContext: 100000,
+    contextNote: "Procedures, interlocks, and startup/shutdown sequences — many sections compiled together.",
     generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.9 },
     review: { reasoning: 0.7, vision: 0, structuredOutputs: 0.6 },
     blend: { capability: 0.4, context: 0.30, price: 0.30 },
   },
   "HAZOP Study": {
     minContext: 128000,
+    contextNote: "P&ID plus design basis and prior studies — the model must hold the drawing and the worksheet in one session.",
     generate: { reasoning: 1.0, vision: 0.6, structuredOutputs: 0.5 },
     review: { reasoning: 1.0, vision: 1.0, structuredOutputs: 0.4 },
     blend: { capability: 0.55, context: 0.30, price: 0.15 },
   },
   "All Tasks": {
     minContext: 0,
+    contextNote: "No task-specific floor — set the slider yourself or pick a deliverable for a recommendation.",
     generate: { reasoning: 0, vision: 0, structuredOutputs: 0 },
     review: { reasoning: 0, vision: 0, structuredOutputs: 0 },
     blend: { capability: 0.5, context: 0.25, price: 0.25 },
@@ -114,9 +125,41 @@ export const SORT_OPTIONS = [
   { label: "Newest First", value: "newest" },
 ];
 
+// The bare /models endpoint defaults to text-output models only (~340). Dedicated
+// image generators (Flux, Recraft, GPT Image, etc.) live in the image slice —
+// 35 models at last check — and require output_modalities=all (no API key).
+export const OPENROUTER_MODELS_URL =
+  "https://openrouter.ai/api/v1/models?output_modalities=all";
+
 // True when the deliverable itself must be a drawing (BFD/PFD/P&ID, generate only).
 export function taskRequiresImage(profile, mode) {
   return !!(profile[mode] || profile.generate)?.requiresImage;
+}
+
+// Min context for filtering the model list. Diagram drafting uses dedicated
+// image models (Flux, Recraft, …) with small context windows — applying a
+// P&ID-sized 128K floor would hide most of the 35 image generators.
+export function effectiveMinContext(profile, mode, userMinCtx) {
+  if (taskRequiresImage(profile, mode)) return userMinCtx;
+  return Math.max(userMinCtx, profile.minContext);
+}
+
+// Process-engineering guidance for the context slider — recommends a default
+// per deliverable but always leaves override to the user.
+export function getContextGuidance(profile, mode) {
+  if (taskRequiresImage(profile, mode)) {
+    return {
+      recommended: 0,
+      floor: 0,
+      note: "Dedicated image models (Flux, Recraft, GPT Image, …) take a short text prompt — context window barely matters. "
+        + "Only raise the slider if you use a multimodal model (GPT/Gemini *-image) and plan to attach stream tables or a BFD/PFD reference image.",
+    };
+  }
+  return {
+    recommended: profile.minContext,
+    floor: profile.minContext,
+    note: profile.contextNote || "",
+  };
 }
 
 // Match model name/id against a query, tolerating spaces vs hyphens so e.g.

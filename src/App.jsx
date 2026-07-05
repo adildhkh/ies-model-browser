@@ -9,8 +9,8 @@ import CompareBar from "./components/CompareBar.jsx";
 import CompareModal from "./components/CompareModal.jsx";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
 import {
-  TASK_PROFILES, fmt, fitScore, getCapabilities, matchesSearch,
-  priceForSort, taskRequiresImage,
+  TASK_PROFILES, OPENROUTER_MODELS_URL, effectiveMinContext, fmt, fitScore,
+  getCapabilities, matchesSearch, priceForSort, taskRequiresImage,
 } from "./utils/models.js";
 
 const MAX_COMPARE = 4;
@@ -35,7 +35,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("https://openrouter.ai/api/v1/models");
+      const res = await fetch(OPENROUTER_MODELS_URL);
       if (!res.ok) throw new Error("HTTP " + res.status + " — " + res.statusText);
       const data = await res.json();
       setModels(data.data || []);
@@ -84,8 +84,12 @@ export default function App() {
   useEffect(() => {
     if (!TASK_PROFILES[task]) setTask("All Tasks");
   }, [task, setTask]);
-  const effectiveMinCtx = Math.max(minCtx, profile.minContext);
   const requiresImage = taskRequiresImage(profile, mode);
+  const effectiveMinCtx = effectiveMinContext(profile, mode, minCtx);
+  const imageModelCount = useMemo(
+    () => models.filter(m => getCapabilities(m).imageGeneration).length,
+    [models],
+  );
 
   const scoredAndFiltered = useMemo(() => {
     let list = models.filter(m => {
@@ -131,6 +135,8 @@ export default function App() {
         searchRef={searchRef}
         favoritesOnly={favoritesOnly} setFavoritesOnly={setFavoritesOnly}
         onRefresh={fetchModels}
+        profile={profile}
+        requiresImage={requiresImage}
       />
 
       <div className="status-bar">
@@ -140,7 +146,12 @@ export default function App() {
           <span>
             Showing <strong>{scoredAndFiltered.length}</strong> of <strong>{models.length}</strong> models · Task: <strong className="accent-text">{task}</strong> · Mode: <strong className="accent-text">{mode === "review" ? "Reviewing" : "Generating"}</strong> · Min context: <strong className="accent-text">{fmt(effectiveMinCtx)}</strong>
             {requiresImage && (
-              <> · Showing <strong className="accent-text">image-output models only</strong> — text and vision-only models are hidden for diagram drafting</>
+              <>
+                {" "}· <strong className="accent-text">{imageModelCount} image-output models</strong> on OpenRouter · list filtered to those only
+                {minCtx > 0 && scoredAndFiltered.length < imageModelCount && (
+                  <> · <span className="status-error">Min context slider is hiding {imageModelCount - scoredAndFiltered.length} — drag it back to “No minimum”</span></>
+                )}
+              </>
             )}
           </span>
         )}
@@ -176,7 +187,7 @@ export default function App() {
       </div>
 
       <div className="app-footer">
-        Data sourced live from openrouter.ai/api/v1/models · Built by{" "}
+        Data sourced live from OpenRouter (full catalog incl. image models) · Built by{" "}
         <a href="https://ies-solutions.org" target="_blank" rel="noopener noreferrer" className="app-footer-link">
           IES · Intelligent Engineering Solutions →
         </a>

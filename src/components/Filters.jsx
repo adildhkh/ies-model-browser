@@ -1,9 +1,11 @@
-import { TASK_PROFILES, MODES, SORT_OPTIONS, fmt } from "../utils/models.js";
+import { TASK_PROFILES, MODES, SORT_OPTIONS, fmt, getContextGuidance } from "../utils/models.js";
 
 export default function Filters({
   task, setTask, mode, setMode, sort, setSort, minCtx, setMinCtx, search, setSearch,
-  searchRef, favoritesOnly, setFavoritesOnly, onRefresh,
+  searchRef, favoritesOnly, setFavoritesOnly, onRefresh, profile, requiresImage,
 }) {
+  const guidance = getContextGuidance(profile, mode);
+
   return (
     <div className="panel filters">
       <div className="filter-group">
@@ -28,12 +30,34 @@ export default function Filters({
       </div>
 
       <div className="filter-group">
-        <label className="filter-label">MIN CONTEXT: {minCtx === 0 ? "No minimum" : fmt(minCtx) + " tokens"}</label>
+        <label className="filter-label">
+          MIN CONTEXT: {minCtx === 0 && guidance.recommended === 0
+            ? "No minimum"
+            : fmt(Math.max(minCtx, requiresImage ? 0 : guidance.floor)) + " effective"}
+          {minCtx > 0 && !requiresImage && minCtx < guidance.recommended && (
+            <span className="filter-label-hint"> (below task recommendation)</span>
+          )}
+        </label>
         <input
           type="range" min={0} max={1000000} step={10000} value={minCtx}
           onChange={e => setMinCtx(Number(e.target.value))}
           className="range-input"
         />
+        <div className="context-guidance">
+          {requiresImage ? (
+            <span>{guidance.note}</span>
+          ) : (
+            <>
+              <strong>Recommended: {guidance.recommended === 0 ? "none" : fmt(guidance.recommended)}</strong>
+              {" — "}{guidance.note}
+              {minCtx !== 0 && (
+                <button type="button" className="btn btn-ghost btn-inline" onClick={() => setMinCtx(0)}>
+                  Use task default
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="filter-group filter-group--grow">
