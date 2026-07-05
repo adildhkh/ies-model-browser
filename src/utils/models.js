@@ -15,6 +15,17 @@
 // "generating" the worksheet, you're continuously reading the P&ID, so
 // vision stays weighted in both modes.
 //
+// imageGeneration (real pixel image output, `architecture.output_modalities`
+// including "image" — verified against live OpenRouter data: only specific
+// dedicated variants like Gemini's *-image models and GPT's *-image models
+// have it, not the flagship chat models) is weighted only for *generating* a
+// diagram domain (BFD/PFD/P&ID) — reviewing an existing one never needs it.
+// Weight decreases as the domain gets more precision-demanding: a rough BFD
+// sketch (boxes and arrows) is more forgiving than a P&ID, where tag
+// numbering and instrumentation symbols per ISA-5.1 matter and today's
+// image-generation models aren't reliably standards-compliant. HAZOP is a
+// worksheet/table deliverable, not a drawing, so it gets no image weight.
+//
 // `blend` controls how much the overall score leans on capability fit vs.
 // raw context vs. price, per domain — e.g. HAZOP weights capability+context
 // highest and price lowest, because it's safety-critical work where
@@ -23,68 +34,68 @@
 export const TASK_PROFILES = {
   "Feasibility Study": {
     minContext: 100000,
-    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
-    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.3 },
+    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4, imageGeneration: 0 },
+    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.3, imageGeneration: 0 },
     blend: { capability: 0.45, context: 0.30, price: 0.25 },
   },
   "Pre-FEED Options Study": {
     minContext: 128000,
-    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.5 },
-    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
+    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.5, imageGeneration: 0 },
+    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4, imageGeneration: 0 },
     blend: { capability: 0.45, context: 0.35, price: 0.20 },
   },
   "Design Basis": {
     minContext: 64000,
-    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.8 },
-    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.4 },
+    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.8, imageGeneration: 0 },
+    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.4, imageGeneration: 0 },
     blend: { capability: 0.5, context: 0.25, price: 0.25 },
   },
   "Block Flow Diagram (BFD)": {
     minContext: 32000,
-    generate: { reasoning: 0.3, vision: 0, structuredOutputs: 0.8 },
-    review: { reasoning: 0.5, vision: 1.0, structuredOutputs: 0.2 },
+    generate: { reasoning: 0.3, vision: 0, structuredOutputs: 0.6, imageGeneration: 0.6 },
+    review: { reasoning: 0.5, vision: 1.0, structuredOutputs: 0.2, imageGeneration: 0 },
     blend: { capability: 0.35, context: 0.15, price: 0.50 },
   },
   "PFD": {
     minContext: 64000,
-    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.8 },
-    review: { reasoning: 0.7, vision: 1.0, structuredOutputs: 0.3 },
+    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.7, imageGeneration: 0.5 },
+    review: { reasoning: 0.7, vision: 1.0, structuredOutputs: 0.3, imageGeneration: 0 },
     blend: { capability: 0.45, context: 0.25, price: 0.30 },
   },
   "P&ID": {
     minContext: 128000,
-    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 1.0 },
-    review: { reasoning: 0.8, vision: 1.0, structuredOutputs: 0.4 },
+    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.9, imageGeneration: 0.3 },
+    review: { reasoning: 0.8, vision: 1.0, structuredOutputs: 0.4, imageGeneration: 0 },
     blend: { capability: 0.5, context: 0.30, price: 0.20 },
   },
   "Process Data Sheet": {
     minContext: 32000,
-    generate: { reasoning: 0.2, vision: 0, structuredOutputs: 1.0 },
-    review: { reasoning: 0.4, vision: 0, structuredOutputs: 0.6 },
+    generate: { reasoning: 0.2, vision: 0, structuredOutputs: 1.0, imageGeneration: 0 },
+    review: { reasoning: 0.4, vision: 0, structuredOutputs: 0.6, imageGeneration: 0 },
     blend: { capability: 0.35, context: 0.15, price: 0.50 },
   },
   "Process Philosophies": {
     minContext: 64000,
-    generate: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
-    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
+    generate: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3, imageGeneration: 0 },
+    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3, imageGeneration: 0 },
     blend: { capability: 0.45, context: 0.25, price: 0.30 },
   },
   "Operating Manual": {
     minContext: 100000,
-    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.9 },
-    review: { reasoning: 0.7, vision: 0, structuredOutputs: 0.6 },
+    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.9, imageGeneration: 0 },
+    review: { reasoning: 0.7, vision: 0, structuredOutputs: 0.6, imageGeneration: 0 },
     blend: { capability: 0.4, context: 0.30, price: 0.30 },
   },
   "HAZOP Study": {
     minContext: 128000,
-    generate: { reasoning: 1.0, vision: 0.6, structuredOutputs: 0.5 },
-    review: { reasoning: 1.0, vision: 1.0, structuredOutputs: 0.4 },
+    generate: { reasoning: 1.0, vision: 0.6, structuredOutputs: 0.5, imageGeneration: 0 },
+    review: { reasoning: 1.0, vision: 1.0, structuredOutputs: 0.4, imageGeneration: 0 },
     blend: { capability: 0.55, context: 0.30, price: 0.15 },
   },
   "All Tasks": {
     minContext: 0,
-    generate: { reasoning: 0, vision: 0, structuredOutputs: 0 },
-    review: { reasoning: 0, vision: 0, structuredOutputs: 0 },
+    generate: { reasoning: 0, vision: 0, structuredOutputs: 0, imageGeneration: 0 },
+    review: { reasoning: 0, vision: 0, structuredOutputs: 0, imageGeneration: 0 },
     blend: { capability: 0.5, context: 0.25, price: 0.25 },
   },
 };
@@ -140,9 +151,8 @@ export function getCapabilities(m) {
     structuredOutputs: params.includes("response_format") || params.includes("structured_outputs"),
     vision: inputMods.includes("image"),
     // Distinct from `vision`: this is pixel image *output*, not diagram reading.
-    // Not scored anywhere — today's models don't reliably produce standards-
-    // compliant, tag-numbered P&IDs/PFDs, so this capability doesn't actually
-    // serve diagram-generation tasks. Shown only as an honest, informational badge.
+    // Scored only for *generating* BFD/PFD/P&ID (see TASK_PROFILES) — reviewing
+    // an existing diagram, or non-visual domains, never weight this.
     imageGeneration: outputMods.includes("image"),
     audio: inputMods.includes("audio") || outputMods.includes("audio"),
     fileInput: inputMods.includes("file"),
@@ -194,13 +204,14 @@ export function fitScore(m, profile, mode) {
     else if (avgPrice < 1) supportingReasons.push("Low cost per token");
   }
 
-  const totalWeight = weights.reasoning + weights.vision + weights.structuredOutputs;
+  const totalWeight = weights.reasoning + weights.vision + weights.structuredOutputs + (weights.imageGeneration || 0);
   let capabilityScore = 1;
   if (totalWeight > 0) {
     let matched = 0;
     if (weights.reasoning > 0) matched += weights.reasoning * (caps.reasoning ? 1 : 0);
     if (weights.vision > 0) matched += weights.vision * (caps.vision ? 1 : 0);
     if (weights.structuredOutputs > 0) matched += weights.structuredOutputs * (caps.structuredOutputs ? 1 : 0);
+    if (weights.imageGeneration > 0) matched += weights.imageGeneration * (caps.imageGeneration ? 1 : 0);
     capabilityScore = matched / totalWeight;
 
     if (weights.reasoning >= 0.7 && caps.reasoning) {
@@ -215,6 +226,9 @@ export function fitScore(m, profile, mode) {
     }
     if (weights.structuredOutputs >= 0.7 && caps.structuredOutputs) {
       capabilityReasons.push("Supports structured output — helps produce a clean, parseable deliverable");
+    }
+    if (weights.imageGeneration > 0 && caps.imageGeneration) {
+      capabilityReasons.push("Can generate the diagram as an actual image (verify against drawing standards before issuing)");
     }
   }
 

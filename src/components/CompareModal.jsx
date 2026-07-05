@@ -7,7 +7,8 @@ const ROWS = [
   { label: "Output price", get: m => fmtPrice(m.pricing?.completion) },
   { label: "Tool calling", get: m => getCapabilities(m).toolCalling ? "Yes" : "No" },
   { label: "Reasoning", get: m => getCapabilities(m).reasoning ? "Yes" : "No" },
-  { label: "Vision (images)", get: m => getCapabilities(m).vision ? "Yes" : "No" },
+  { label: "Vision (reads images)", get: m => getCapabilities(m).vision ? "Yes" : "No" },
+  { label: "Image generation", get: m => getCapabilities(m).imageGeneration ? "Yes" : "No" },
   { label: "Audio", get: m => getCapabilities(m).audio ? "Yes" : "No" },
   { label: "Free tier", get: m => getCapabilities(m).free ? "Yes" : "No" },
   {
