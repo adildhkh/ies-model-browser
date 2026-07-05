@@ -1,19 +1,98 @@
 // All scoring here is derived only from fields OpenRouter's API actually returns
 // (context length, price, declared parameters/modalities). There is no external
-// "intelligence" benchmark data — we never fabricate a quality score.
-
+// "intelligence"/GPQA/MMLU benchmark data anywhere in this API — we never
+// fabricate a quality score. Where a task genuinely needs "thinking power,"
+// the best honest proxy available is the `reasoning` capability flag (does
+// the model support an extended/effortful thinking mode) — a real, binary
+// API field, not a measurement of how smart the model is.
+//
+// Each domain below is scored against two weight sets — "generate" (drafting
+// a new deliverable) and "review" (checking one submitted by someone else) —
+// because the two activities lean on different capabilities. Vision (reading
+// a diagram) only matters for domains that are inherently visual, and even
+// then usually only in review mode: generating a brand-new BFD/PFD/P&ID has
+// nothing existing to look at. HAZOP is the one exception — even when
+// "generating" the worksheet, you're continuously reading the P&ID, so
+// vision stays weighted in both modes.
+//
+// `blend` controls how much the overall score leans on capability fit vs.
+// raw context vs. price, per domain — e.g. HAZOP weights capability+context
+// highest and price lowest, because it's safety-critical work where
+// correctness matters more than cost; Process Data Sheet generation is
+// mechanical enough that a cheap model is genuinely fine.
 export const TASK_PROFILES = {
-  "Feasibility Study": { minContext: 100000, preferred: ["reasoning"] },
-  "Design Basis Generation": { minContext: 64000, preferred: ["reasoning", "structuredOutputs"] },
-  "Block Flow Diagram Creation": { minContext: 32000, preferred: ["vision"] },
-  "PFD Creation": { minContext: 64000, preferred: ["vision", "structuredOutputs"] },
-  "Process Data Sheet Generation": { minContext: 32000, preferred: ["structuredOutputs"] },
-  "Pre-FEED Options Study": { minContext: 128000, preferred: ["reasoning"] },
-  "Process Philosophies Creation": { minContext: 64000, preferred: ["reasoning"] },
-  "Operating Manual": { minContext: 100000, preferred: ["structuredOutputs"] },
-  "HAZOP Study": { minContext: 128000, preferred: ["reasoning", "vision"] },
-  "All Tasks": { minContext: 0, preferred: [] },
+  "Feasibility Study": {
+    minContext: 100000,
+    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
+    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.3 },
+    blend: { capability: 0.45, context: 0.30, price: 0.25 },
+  },
+  "Pre-FEED Options Study": {
+    minContext: 128000,
+    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.5 },
+    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
+    blend: { capability: 0.45, context: 0.35, price: 0.20 },
+  },
+  "Design Basis": {
+    minContext: 64000,
+    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.8 },
+    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.4 },
+    blend: { capability: 0.5, context: 0.25, price: 0.25 },
+  },
+  "Block Flow Diagram (BFD)": {
+    minContext: 32000,
+    generate: { reasoning: 0.3, vision: 0, structuredOutputs: 0.8 },
+    review: { reasoning: 0.5, vision: 1.0, structuredOutputs: 0.2 },
+    blend: { capability: 0.35, context: 0.15, price: 0.50 },
+  },
+  "PFD": {
+    minContext: 64000,
+    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.8 },
+    review: { reasoning: 0.7, vision: 1.0, structuredOutputs: 0.3 },
+    blend: { capability: 0.45, context: 0.25, price: 0.30 },
+  },
+  "P&ID": {
+    minContext: 128000,
+    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 1.0 },
+    review: { reasoning: 0.8, vision: 1.0, structuredOutputs: 0.4 },
+    blend: { capability: 0.5, context: 0.30, price: 0.20 },
+  },
+  "Process Data Sheet": {
+    minContext: 32000,
+    generate: { reasoning: 0.2, vision: 0, structuredOutputs: 1.0 },
+    review: { reasoning: 0.4, vision: 0, structuredOutputs: 0.6 },
+    blend: { capability: 0.35, context: 0.15, price: 0.50 },
+  },
+  "Process Philosophies": {
+    minContext: 64000,
+    generate: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
+    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
+    blend: { capability: 0.45, context: 0.25, price: 0.30 },
+  },
+  "Operating Manual": {
+    minContext: 100000,
+    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.9 },
+    review: { reasoning: 0.7, vision: 0, structuredOutputs: 0.6 },
+    blend: { capability: 0.4, context: 0.30, price: 0.30 },
+  },
+  "HAZOP Study": {
+    minContext: 128000,
+    generate: { reasoning: 1.0, vision: 0.6, structuredOutputs: 0.5 },
+    review: { reasoning: 1.0, vision: 1.0, structuredOutputs: 0.4 },
+    blend: { capability: 0.55, context: 0.30, price: 0.15 },
+  },
+  "All Tasks": {
+    minContext: 0,
+    generate: { reasoning: 0, vision: 0, structuredOutputs: 0 },
+    review: { reasoning: 0, vision: 0, structuredOutputs: 0 },
+    blend: { capability: 0.5, context: 0.25, price: 0.25 },
+  },
 };
+
+export const MODES = [
+  { label: "Generating / Drafting", value: "generate" },
+  { label: "Reviewing / Checking", value: "review" },
+];
 
 export const SORT_OPTIONS = [
   { label: "Best Match", value: "best_match" },
@@ -60,6 +139,11 @@ export function getCapabilities(m) {
     reasoning: params.includes("reasoning") || params.includes("include_reasoning") || !!m.reasoning,
     structuredOutputs: params.includes("response_format") || params.includes("structured_outputs"),
     vision: inputMods.includes("image"),
+    // Distinct from `vision`: this is pixel image *output*, not diagram reading.
+    // Not scored anywhere — today's models don't reliably produce standards-
+    // compliant, tag-numbered P&IDs/PFDs, so this capability doesn't actually
+    // serve diagram-generation tasks. Shown only as an honest, informational badge.
+    imageGeneration: outputMods.includes("image"),
     audio: inputMods.includes("audio") || outputMods.includes("audio"),
     fileInput: inputMods.includes("file"),
     longContext: (m.context_length || 0) >= 200000,
@@ -75,13 +159,20 @@ export function priceForSort(m) {
   return perM === null ? Infinity : perM;
 }
 
-// Blend context fit + price + capability match into one "Best Match" score.
-// Every input is a real API field — the function is a ranking heuristic,
-// not a claim about model intelligence.
-export function fitScore(m, profile) {
+// Blend context fit + price + capability match into one "Best Match" score,
+// weighted per-domain and per-mode (see TASK_PROFILES comment above). Every
+// input is a real API field — this is a ranking heuristic, not a claim about
+// model intelligence.
+export function fitScore(m, profile, mode) {
   const ctx = m.context_length || 0;
   const caps = getCapabilities(m);
-  const reasons = [];
+  const weights = profile[mode] || profile.generate;
+
+  // Capability reasons are listed first — they're the actual task-fit
+  // justification — with context/price as supporting reasons after, so the
+  // most decision-relevant explanation isn't the one truncated by the UI.
+  const capabilityReasons = [];
+  const supportingReasons = [];
 
   // Diminishing-returns curve instead of a hard cap at 1 — otherwise every
   // model past "3x the minimum" ties at a perfect score and ties collapse
@@ -89,32 +180,45 @@ export function fitScore(m, profile) {
   const minCtx = Math.max(profile.minContext, 1);
   const contextScore = ctx / (ctx + minCtx * 2);
   if (ctx >= profile.minContext && profile.minContext > 0) {
-    reasons.push(`Context comfortably covers this task (${fmt(ctx)} tokens)`);
+    supportingReasons.push(`Context comfortably covers this task (${fmt(ctx)} tokens)`);
   }
 
   let priceScore;
   if (caps.variablePricing) {
     priceScore = 0.5; // unknown until routed — neutral, not a false "cheapest"
-    reasons.push("Pricing varies by which model it routes to");
+    supportingReasons.push("Pricing varies by which model it routes to");
   } else {
     const avgPrice = (pricePerMillion(m.pricing?.prompt) + pricePerMillion(m.pricing?.completion)) / 2;
     priceScore = caps.free ? 1 : 1 / (1 + avgPrice / 5);
-    if (caps.free) reasons.push("Free to use");
-    else if (avgPrice < 1) reasons.push("Low cost per token");
+    if (caps.free) supportingReasons.push("Free to use");
+    else if (avgPrice < 1) supportingReasons.push("Low cost per token");
   }
 
-  let capMatches = 0;
-  for (const tag of profile.preferred) {
-    if (caps[tag]) {
-      capMatches++;
-      if (tag === "toolCalling") reasons.push("Supports tool calling");
-      if (tag === "reasoning") reasons.push("Supports extended reasoning");
-      if (tag === "vision") reasons.push("Can read images");
-      if (tag === "fileInput") reasons.push("Can read files directly");
+  const totalWeight = weights.reasoning + weights.vision + weights.structuredOutputs;
+  let capabilityScore = 1;
+  if (totalWeight > 0) {
+    let matched = 0;
+    if (weights.reasoning > 0) matched += weights.reasoning * (caps.reasoning ? 1 : 0);
+    if (weights.vision > 0) matched += weights.vision * (caps.vision ? 1 : 0);
+    if (weights.structuredOutputs > 0) matched += weights.structuredOutputs * (caps.structuredOutputs ? 1 : 0);
+    capabilityScore = matched / totalWeight;
+
+    if (weights.reasoning >= 0.7 && caps.reasoning) {
+      capabilityReasons.push(mode === "review"
+        ? "Strong reasoning — suited to critically checking this work"
+        : "Strong reasoning — suited to working through this task");
+    }
+    if (weights.vision >= 0.5 && caps.vision) {
+      capabilityReasons.push(mode === "review"
+        ? "Can read diagrams — needed to review the drawing"
+        : "Can read diagrams — useful for referencing the P&ID while drafting");
+    }
+    if (weights.structuredOutputs >= 0.7 && caps.structuredOutputs) {
+      capabilityReasons.push("Supports structured output — helps produce a clean, parseable deliverable");
     }
   }
-  const capabilityScore = profile.preferred.length ? capMatches / profile.preferred.length : 1;
 
-  const score = capabilityScore * 0.5 + contextScore * 0.25 + priceScore * 0.25;
-  return { score, reasons };
+  const b = profile.blend;
+  const score = capabilityScore * b.capability + contextScore * b.context + priceScore * b.price;
+  return { score, reasons: [...capabilityReasons, ...supportingReasons] };
 }

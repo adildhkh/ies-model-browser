@@ -16,7 +16,8 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [task, setTask] = useLocalStorage("imb_task", "Document Analysis");
+  const [task, setTask] = useLocalStorage("imb_task", "Feasibility Study");
+  const [mode, setMode] = useLocalStorage("imb_mode", "generate");
   const [sort, setSort] = useLocalStorage("imb_sort", "best_match");
   const [search, setSearch] = useState("");
   const [minCtx, setMinCtx] = useLocalStorage("imb_min_ctx", 0);
@@ -93,7 +94,7 @@ export default function App() {
 
     if (sort === "best_match") {
       list = list
-        .map(m => ({ m, ...fitScore(m, profile) }))
+        .map(m => ({ m, ...fitScore(m, profile, mode) }))
         .sort((a, b) => {
           // Real-valued scores rarely tie exactly, but when they do, break
           // the tie with more real fields (context, then price) instead of
@@ -116,7 +117,7 @@ export default function App() {
         .map(m => ({ m, reasons: [] }));
     }
     return list;
-  }, [models, effectiveMinCtx, favoritesOnly, favorites, search, sort, profile]);
+  }, [models, effectiveMinCtx, favoritesOnly, favorites, search, sort, profile, mode]);
 
   const compareModels = models.filter(m => compareIds.includes(m.id));
 
@@ -126,6 +127,7 @@ export default function App() {
 
       <Filters
         task={task} setTask={setTask}
+        mode={mode} setMode={setMode}
         sort={sort} setSort={setSort}
         minCtx={minCtx} setMinCtx={setMinCtx}
         search={search} setSearch={setSearch}
@@ -139,7 +141,7 @@ export default function App() {
         {error && <span className="status-error">⚠ {error} — try refreshing</span>}
         {!loading && !error && fetched && (
           <span>
-            Showing <strong>{scoredAndFiltered.length}</strong> of <strong>{models.length}</strong> models · Task: <strong className="accent-text">{task}</strong> · Min context: <strong className="accent-text">{fmt(effectiveMinCtx)}</strong>
+            Showing <strong>{scoredAndFiltered.length}</strong> of <strong>{models.length}</strong> models · Task: <strong className="accent-text">{task}</strong> · Mode: <strong className="accent-text">{mode === "review" ? "Reviewing" : "Generating"}</strong> · Min context: <strong className="accent-text">{fmt(effectiveMinCtx)}</strong>
           </span>
         )}
       </div>

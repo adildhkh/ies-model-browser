@@ -35,7 +35,8 @@ export default function ModelCard({ m, rank, showRank, isFavorite, onToggleFavor
         {caps.longContext && <Badge label="Long Context" color="#22c55e" />}
         {caps.toolCalling && <Badge label="Tool Calling" color="#38bdf8" title="Supports function/tool calling" />}
         {caps.reasoning && <Badge label="Reasoning" color="#f472b6" title="Supports extended reasoning" />}
-        {caps.vision && <Badge label="Vision" color="#a78bfa" title="Accepts image input" />}
+        {caps.vision && <Badge label="Vision" color="#a78bfa" title="Accepts image input — can read diagrams" />}
+        {caps.imageGeneration && <Badge label="Image Output" color="#f97316" title="Can generate pixel images — not reliable for standards-compliant technical diagrams like P&IDs, so this isn't used in task scoring" />}
         {caps.audio && <Badge label="Audio" color="#fb923c" title="Accepts or produces audio" />}
         {caps.variablePricing && <Badge label="Variable Pricing" color="#eab308" title="This is a router — price depends on which model it picks per request" />}
       </div>
@@ -64,7 +65,7 @@ export default function ModelCard({ m, rank, showRank, isFavorite, onToggleFavor
 
       {reasons && reasons.length > 0 && (
         <div className="reasons">
-          {reasons.slice(0, 2).map((r, i) => <div key={i} className="reason-item">✓ {r}</div>)}
+          {reasons.slice(0, 4).map((r, i) => <div key={i} className="reason-item">✓ {r}</div>)}
         </div>
       )}
 

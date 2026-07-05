@@ -1,7 +1,7 @@
-import { TASK_PROFILES, SORT_OPTIONS, fmt } from "../utils/models.js";
+import { TASK_PROFILES, MODES, SORT_OPTIONS, fmt } from "../utils/models.js";
 
 export default function Filters({
-  task, setTask, sort, setSort, minCtx, setMinCtx, search, setSearch,
+  task, setTask, mode, setMode, sort, setSort, minCtx, setMinCtx, search, setSearch,
   searchRef, favoritesOnly, setFavoritesOnly, onRefresh,
 }) {
   return (
@@ -10,6 +10,13 @@ export default function Filters({
         <label className="filter-label">TASK TYPE</label>
         <select value={task} onChange={e => setTask(e.target.value)} className="select-input">
           {Object.keys(TASK_PROFILES).map(t => <option key={t}>{t}</option>)}
+        </select>
+      </div>
+
+      <div className="filter-group">
+        <label className="filter-label">MODE</label>
+        <select value={mode} onChange={e => setMode(e.target.value)} className="select-input">
+          {MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </div>
 
