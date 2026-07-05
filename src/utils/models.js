@@ -15,16 +15,18 @@
 // "generating" the worksheet, you're continuously reading the P&ID, so
 // vision stays weighted in both modes.
 //
-// imageGeneration (real pixel image output, `architecture.output_modalities`
-// including "image" — verified against live OpenRouter data: only specific
-// dedicated variants like Gemini's *-image models and GPT's *-image models
-// have it, not the flagship chat models) is weighted only for *generating* a
-// diagram domain (BFD/PFD/P&ID) — reviewing an existing one never needs it.
-// Weight decreases as the domain gets more precision-demanding: a rough BFD
-// sketch (boxes and arrows) is more forgiving than a P&ID, where tag
-// numbering and instrumentation symbols per ISA-5.1 matter and today's
-// image-generation models aren't reliably standards-compliant. HAZOP is a
-// worksheet/table deliverable, not a drawing, so it gets no image weight.
+// requiresImage marks domain × mode combinations where the deliverable
+// itself is an image (BFD/PFD/P&ID, generate mode only — reviewing an
+// existing diagram doesn't require producing one, and HAZOP's deliverable is
+// a worksheet/table, not a drawing). This is a GATE, not just another
+// weighted input: a model that cannot produce an image at all (verified via
+// `architecture.output_modalities` — see getCapabilities) cannot fulfil the
+// deliverable no matter how strong its reasoning or structured-output
+// support is, so it must be heavily demoted rather than able to out-score
+// image-capable models on other axes. (An earlier version of this scoring
+// treated image generation as just one weighted term among several, which
+// let a free/cheap text-only model's price+context advantage swamp it —
+// mathematically wrong for a capability that's actually a hard requirement.)
 //
 // `blend` controls how much the overall score leans on capability fit vs.
 // raw context vs. price, per domain — e.g. HAZOP weights capability+context
@@ -34,68 +36,68 @@
 export const TASK_PROFILES = {
   "Feasibility Study": {
     minContext: 100000,
-    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4, imageGeneration: 0 },
-    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.3, imageGeneration: 0 },
+    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
+    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.3 },
     blend: { capability: 0.45, context: 0.30, price: 0.25 },
   },
   "Pre-FEED Options Study": {
     minContext: 128000,
-    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.5, imageGeneration: 0 },
-    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4, imageGeneration: 0 },
+    generate: { reasoning: 1.0, vision: 0, structuredOutputs: 0.5 },
+    review: { reasoning: 1.0, vision: 0, structuredOutputs: 0.4 },
     blend: { capability: 0.45, context: 0.35, price: 0.20 },
   },
   "Design Basis": {
     minContext: 64000,
-    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.8, imageGeneration: 0 },
-    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.4, imageGeneration: 0 },
+    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.8 },
+    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.4 },
     blend: { capability: 0.5, context: 0.25, price: 0.25 },
   },
   "Block Flow Diagram (BFD)": {
     minContext: 32000,
-    generate: { reasoning: 0.3, vision: 0, structuredOutputs: 0.6, imageGeneration: 0.6 },
-    review: { reasoning: 0.5, vision: 1.0, structuredOutputs: 0.2, imageGeneration: 0 },
+    generate: { reasoning: 0.3, vision: 0, structuredOutputs: 0.6, requiresImage: true },
+    review: { reasoning: 0.5, vision: 1.0, structuredOutputs: 0.2 },
     blend: { capability: 0.35, context: 0.15, price: 0.50 },
   },
   "PFD": {
     minContext: 64000,
-    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.7, imageGeneration: 0.5 },
-    review: { reasoning: 0.7, vision: 1.0, structuredOutputs: 0.3, imageGeneration: 0 },
+    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.7, requiresImage: true },
+    review: { reasoning: 0.7, vision: 1.0, structuredOutputs: 0.3 },
     blend: { capability: 0.45, context: 0.25, price: 0.30 },
   },
   "P&ID": {
     minContext: 128000,
-    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.9, imageGeneration: 0.3 },
-    review: { reasoning: 0.8, vision: 1.0, structuredOutputs: 0.4, imageGeneration: 0 },
+    generate: { reasoning: 0.7, vision: 0, structuredOutputs: 0.9, requiresImage: true },
+    review: { reasoning: 0.8, vision: 1.0, structuredOutputs: 0.4 },
     blend: { capability: 0.5, context: 0.30, price: 0.20 },
   },
   "Process Data Sheet": {
     minContext: 32000,
-    generate: { reasoning: 0.2, vision: 0, structuredOutputs: 1.0, imageGeneration: 0 },
-    review: { reasoning: 0.4, vision: 0, structuredOutputs: 0.6, imageGeneration: 0 },
+    generate: { reasoning: 0.2, vision: 0, structuredOutputs: 1.0 },
+    review: { reasoning: 0.4, vision: 0, structuredOutputs: 0.6 },
     blend: { capability: 0.35, context: 0.15, price: 0.50 },
   },
   "Process Philosophies": {
     minContext: 64000,
-    generate: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3, imageGeneration: 0 },
-    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3, imageGeneration: 0 },
+    generate: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
+    review: { reasoning: 0.9, vision: 0, structuredOutputs: 0.3 },
     blend: { capability: 0.45, context: 0.25, price: 0.30 },
   },
   "Operating Manual": {
     minContext: 100000,
-    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.9, imageGeneration: 0 },
-    review: { reasoning: 0.7, vision: 0, structuredOutputs: 0.6, imageGeneration: 0 },
+    generate: { reasoning: 0.6, vision: 0, structuredOutputs: 0.9 },
+    review: { reasoning: 0.7, vision: 0, structuredOutputs: 0.6 },
     blend: { capability: 0.4, context: 0.30, price: 0.30 },
   },
   "HAZOP Study": {
     minContext: 128000,
-    generate: { reasoning: 1.0, vision: 0.6, structuredOutputs: 0.5, imageGeneration: 0 },
-    review: { reasoning: 1.0, vision: 1.0, structuredOutputs: 0.4, imageGeneration: 0 },
+    generate: { reasoning: 1.0, vision: 0.6, structuredOutputs: 0.5 },
+    review: { reasoning: 1.0, vision: 1.0, structuredOutputs: 0.4 },
     blend: { capability: 0.55, context: 0.30, price: 0.15 },
   },
   "All Tasks": {
     minContext: 0,
-    generate: { reasoning: 0, vision: 0, structuredOutputs: 0, imageGeneration: 0 },
-    review: { reasoning: 0, vision: 0, structuredOutputs: 0, imageGeneration: 0 },
+    generate: { reasoning: 0, vision: 0, structuredOutputs: 0 },
+    review: { reasoning: 0, vision: 0, structuredOutputs: 0 },
     blend: { capability: 0.5, context: 0.25, price: 0.25 },
   },
 };
@@ -151,8 +153,8 @@ export function getCapabilities(m) {
     structuredOutputs: params.includes("response_format") || params.includes("structured_outputs"),
     vision: inputMods.includes("image"),
     // Distinct from `vision`: this is pixel image *output*, not diagram reading.
-    // Scored only for *generating* BFD/PFD/P&ID (see TASK_PROFILES) — reviewing
-    // an existing diagram, or non-visual domains, never weight this.
+    // Gates the score for *generating* BFD/PFD/P&ID (see fitScore) — reviewing
+    // an existing diagram, or non-visual domains, never checks this.
     imageGeneration: outputMods.includes("image"),
     audio: inputMods.includes("audio") || outputMods.includes("audio"),
     fileInput: inputMods.includes("file"),
@@ -173,6 +175,14 @@ export function priceForSort(m) {
 // weighted per-domain and per-mode (see TASK_PROFILES comment above). Every
 // input is a real API field — this is a ranking heuristic, not a claim about
 // model intelligence.
+// A model that can't produce an image at all still gets *some* score for a
+// drawing-generation task (it can help with supporting text — tag lists,
+// stream descriptions) but must never be able to out-rank an image-capable
+// model on capability fit. 0.15 means an otherwise-perfect non-image model
+// tops out at 15% of the capability score an equally-strong image-capable
+// model would get.
+const NO_IMAGE_GATE_PENALTY = 0.15;
+
 export function fitScore(m, profile, mode) {
   const ctx = m.context_length || 0;
   const caps = getCapabilities(m);
@@ -183,6 +193,7 @@ export function fitScore(m, profile, mode) {
   // most decision-relevant explanation isn't the one truncated by the UI.
   const capabilityReasons = [];
   const supportingReasons = [];
+  const warnings = [];
 
   // Diminishing-returns curve instead of a hard cap at 1 — otherwise every
   // model past "3x the minimum" ties at a perfect score and ties collapse
@@ -204,14 +215,13 @@ export function fitScore(m, profile, mode) {
     else if (avgPrice < 1) supportingReasons.push("Low cost per token");
   }
 
-  const totalWeight = weights.reasoning + weights.vision + weights.structuredOutputs + (weights.imageGeneration || 0);
+  const totalWeight = weights.reasoning + weights.vision + weights.structuredOutputs;
   let capabilityScore = 1;
   if (totalWeight > 0) {
     let matched = 0;
     if (weights.reasoning > 0) matched += weights.reasoning * (caps.reasoning ? 1 : 0);
     if (weights.vision > 0) matched += weights.vision * (caps.vision ? 1 : 0);
     if (weights.structuredOutputs > 0) matched += weights.structuredOutputs * (caps.structuredOutputs ? 1 : 0);
-    if (weights.imageGeneration > 0) matched += weights.imageGeneration * (caps.imageGeneration ? 1 : 0);
     capabilityScore = matched / totalWeight;
 
     if (weights.reasoning >= 0.7 && caps.reasoning) {
@@ -227,12 +237,22 @@ export function fitScore(m, profile, mode) {
     if (weights.structuredOutputs >= 0.7 && caps.structuredOutputs) {
       capabilityReasons.push("Supports structured output — helps produce a clean, parseable deliverable");
     }
-    if (weights.imageGeneration > 0 && caps.imageGeneration) {
+  }
+
+  // Image generation is a gate, not a weighted input (see NO_IMAGE_GATE_PENALTY
+  // comment): a model that literally cannot produce an image is heavily
+  // demoted for a drawing-generation task, regardless of how strong its
+  // reasoning or structured output support is.
+  if (weights.requiresImage) {
+    if (caps.imageGeneration) {
       capabilityReasons.push("Can generate the diagram as an actual image (verify against drawing standards before issuing)");
+    } else {
+      capabilityScore *= NO_IMAGE_GATE_PENALTY;
+      warnings.push("Cannot generate this diagram as an image — text-only output, not a substitute for the drawing itself");
     }
   }
 
   const b = profile.blend;
   const score = capabilityScore * b.capability + contextScore * b.context + priceScore * b.price;
-  return { score, reasons: [...capabilityReasons, ...supportingReasons] };
+  return { score, reasons: [...capabilityReasons, ...supportingReasons], warnings };
 }

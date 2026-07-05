@@ -2,7 +2,7 @@ import Badge from "./Badge.jsx";
 import ContextBar from "./ContextBar.jsx";
 import { fmt, fmtPrice, getCapabilities } from "../utils/models.js";
 
-export default function ModelCard({ m, rank, showRank, isFavorite, onToggleFavorite, isSelected, onToggleCompare, compareDisabled, reasons }) {
+export default function ModelCard({ m, rank, showRank, isFavorite, onToggleFavorite, isSelected, onToggleCompare, compareDisabled, reasons, warnings }) {
   const ctx = m.context_length;
   const inP = m.pricing?.prompt;
   const outP = m.pricing?.completion;
@@ -66,6 +66,12 @@ export default function ModelCard({ m, rank, showRank, isFavorite, onToggleFavor
       {reasons && reasons.length > 0 && (
         <div className="reasons">
           {reasons.slice(0, 4).map((r, i) => <div key={i} className="reason-item">✓ {r}</div>)}
+        </div>
+      )}
+
+      {warnings && warnings.length > 0 && (
+        <div className="warnings">
+          {warnings.map((w, i) => <div key={i} className="warning-item">⚠ {w}</div>)}
         </div>
       )}
 

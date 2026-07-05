@@ -104,7 +104,7 @@ export default function App() {
           if (ctxDiff !== 0) return ctxDiff;
           return priceForSort(a.m) - priceForSort(b.m);
         })
-        .map(({ m, reasons }) => ({ m, reasons }));
+        .map(({ m, reasons, warnings }) => ({ m, reasons, warnings }));
     } else {
       list = list
         .slice()
@@ -114,7 +114,7 @@ export default function App() {
           if (sort === "newest") return (b.created || 0) - (a.created || 0);
           return 0;
         })
-        .map(m => ({ m, reasons: [] }));
+        .map(m => ({ m, reasons: [], warnings: [] }));
     }
     return list;
   }, [models, effectiveMinCtx, favoritesOnly, favorites, search, sort, profile, mode]);
@@ -148,13 +148,14 @@ export default function App() {
 
       <div className="model-grid">
         {loading && Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
-        {!loading && scoredAndFiltered.map(({ m, reasons }, i) => (
+        {!loading && scoredAndFiltered.map(({ m, reasons, warnings }, i) => (
           <ModelCard
             key={m.id}
             m={m}
             rank={i + 1}
             showRank={sort === "best_match"}
             reasons={reasons}
+            warnings={warnings}
             isFavorite={favorites.includes(m.id)}
             onToggleFavorite={toggleFavorite}
             isSelected={compareIds.includes(m.id)}
