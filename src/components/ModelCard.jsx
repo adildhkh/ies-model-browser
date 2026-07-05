@@ -2,7 +2,7 @@ import Badge from "./Badge.jsx";
 import ContextBar from "./ContextBar.jsx";
 import { fmt, fmtPrice, getCapabilities } from "../utils/models.js";
 
-export default function ModelCard({ m, rank, showRank, isFavorite, onToggleFavorite, isSelected, onToggleCompare, compareDisabled, reasons, warnings }) {
+export default function ModelCard({ m, rank, showRank, requiresImage, isFavorite, onToggleFavorite, isSelected, onToggleCompare, compareDisabled, reasons, warnings }) {
   const ctx = m.context_length;
   const inP = m.pricing?.prompt;
   const outP = m.pricing?.completion;
@@ -35,8 +35,24 @@ export default function ModelCard({ m, rank, showRank, isFavorite, onToggleFavor
         {caps.longContext && <Badge label="Long Context" color="#22c55e" />}
         {caps.toolCalling && <Badge label="Tool Calling" color="#38bdf8" title="Supports function/tool calling" />}
         {caps.reasoning && <Badge label="Reasoning" color="#f472b6" title="Supports extended reasoning" />}
-        {caps.vision && <Badge label="Vision" color="#a78bfa" title="Accepts image input — can read diagrams" />}
-        {caps.imageGeneration && <Badge label="Image Output" color="#f97316" title="Can generate pixel images — weighted for drafting BFD/PFD/P&ID diagrams, but verify against drawing standards before issuing" />}
+        {caps.vision && (
+          <Badge
+            label="Vision"
+            color="#a78bfa"
+            title={requiresImage && !caps.imageGeneration
+              ? "Can read diagrams only — cannot produce the drawing itself (look for Image Output)"
+              : "Accepts image input — can read diagrams"}
+          />
+        )}
+        {caps.imageGeneration && (
+          <Badge
+            label="Image Output"
+            color="#f97316"
+            title={requiresImage
+              ? "Can generate the diagram as a pixel image — required for drafting this deliverable (verify against drawing standards before issuing)"
+              : "Can generate pixel images — not required for this task, but available"}
+          />
+        )}
         {caps.audio && <Badge label="Audio" color="#fb923c" title="Accepts or produces audio" />}
         {caps.variablePricing && <Badge label="Variable Pricing" color="#eab308" title="This is a router — price depends on which model it picks per request" />}
       </div>

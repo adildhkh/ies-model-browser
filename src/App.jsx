@@ -8,7 +8,10 @@ import EmptyState from "./components/EmptyState.jsx";
 import CompareBar from "./components/CompareBar.jsx";
 import CompareModal from "./components/CompareModal.jsx";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
-import { TASK_PROFILES, fmt, fitScore, priceForSort } from "./utils/models.js";
+import {
+  TASK_PROFILES, fmt, fitScore, imageCapableSortKey, matchesSearch,
+  priceForSort, taskRequiresImage,
+} from "./utils/models.js";
 
 const MAX_COMPARE = 4;
 
@@ -82,42 +85,41 @@ export default function App() {
     if (!TASK_PROFILES[task]) setTask("All Tasks");
   }, [task, setTask]);
   const effectiveMinCtx = Math.max(minCtx, profile.minContext);
+  const requiresImage = taskRequiresImage(profile, mode);
 
   const scoredAndFiltered = useMemo(() => {
-    const q = search.toLowerCase();
     let list = models.filter(m => {
       if ((m.context_length || 0) < effectiveMinCtx) return false;
       if (favoritesOnly && !favorites.includes(m.id)) return false;
-      if (q && !(m.name || "").toLowerCase().includes(q) && !(m.id || "").toLowerCase().includes(q)) return false;
+      if (!matchesSearch(m, search)) return false;
       return true;
     });
 
+    // Always score for reasons/warnings — vision-only models must show the
+    // "cannot generate this diagram" warning even when sorted by price, etc.
+    list = list.map(m => ({ m, ...fitScore(m, profile, mode) }));
+
     if (sort === "best_match") {
-      list = list
-        .map(m => ({ m, ...fitScore(m, profile, mode) }))
-        .sort((a, b) => {
-          // Real-valued scores rarely tie exactly, but when they do, break
-          // the tie with more real fields (context, then price) instead of
-          // silently falling back to the API's arbitrary original order.
-          if (b.score !== a.score) return b.score - a.score;
-          const ctxDiff = (b.m.context_length || 0) - (a.m.context_length || 0);
-          if (ctxDiff !== 0) return ctxDiff;
-          return priceForSort(a.m) - priceForSort(b.m);
-        })
-        .map(({ m, reasons, warnings }) => ({ m, reasons, warnings }));
+      list.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const ctxDiff = (b.m.context_length || 0) - (a.m.context_length || 0);
+        if (ctxDiff !== 0) return ctxDiff;
+        return priceForSort(a.m) - priceForSort(b.m);
+      });
     } else {
-      list = list
-        .slice()
-        .sort((a, b) => {
-          if (sort === "price_asc") return priceForSort(a) - priceForSort(b);
-          if (sort === "context_desc") return (b.context_length || 0) - (a.context_length || 0);
-          if (sort === "newest") return (b.created || 0) - (a.created || 0);
-          return 0;
-        })
-        .map(m => ({ m, reasons: [], warnings: [] }));
+      list.sort((a, b) => {
+        if (requiresImage) {
+          const imgDiff = imageCapableSortKey(a.m) - imageCapableSortKey(b.m);
+          if (imgDiff !== 0) return imgDiff;
+        }
+        if (sort === "price_asc") return priceForSort(a.m) - priceForSort(b.m);
+        if (sort === "context_desc") return (b.m.context_length || 0) - (a.m.context_length || 0);
+        if (sort === "newest") return (b.m.created || 0) - (a.m.created || 0);
+        return 0;
+      });
     }
     return list;
-  }, [models, effectiveMinCtx, favoritesOnly, favorites, search, sort, profile, mode]);
+  }, [models, effectiveMinCtx, favoritesOnly, favorites, search, sort, profile, mode, requiresImage]);
 
   const compareModels = models.filter(m => compareIds.includes(m.id));
 
@@ -142,6 +144,9 @@ export default function App() {
         {!loading && !error && fetched && (
           <span>
             Showing <strong>{scoredAndFiltered.length}</strong> of <strong>{models.length}</strong> models · Task: <strong className="accent-text">{task}</strong> · Mode: <strong className="accent-text">{mode === "review" ? "Reviewing" : "Generating"}</strong> · Min context: <strong className="accent-text">{fmt(effectiveMinCtx)}</strong>
+            {requiresImage && (
+              <> · <strong className="accent-text">Image output required</strong> — only models with the <strong>Image Output</strong> badge can draft the drawing; <strong>Vision</strong> means read-only</>
+            )}
           </span>
         )}
       </div>
@@ -154,6 +159,7 @@ export default function App() {
             m={m}
             rank={i + 1}
             showRank={sort === "best_match"}
+            requiresImage={requiresImage}
             reasons={reasons}
             warnings={warnings}
             isFavorite={favorites.includes(m.id)}

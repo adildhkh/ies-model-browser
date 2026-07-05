@@ -114,6 +114,22 @@ export const SORT_OPTIONS = [
   { label: "Newest First", value: "newest" },
 ];
 
+// True when the deliverable itself must be a drawing (BFD/PFD/P&ID, generate only).
+export function taskRequiresImage(profile, mode) {
+  return !!(profile[mode] || profile.generate)?.requiresImage;
+}
+
+// Match model name/id against a query, tolerating spaces vs hyphens so e.g.
+// "gemini 2.5 flash" still finds google/gemini-2.5-flash-image.
+export function matchesSearch(m, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const hay = ((m.name || "") + " " + (m.id || "")).toLowerCase();
+  if (hay.includes(q)) return true;
+  const norm = (s) => s.replace(/[-_\s./]+/g, "");
+  return norm(hay).includes(norm(q));
+}
+
 export function fmt(n) {
   if (!n) return "—";
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
@@ -169,6 +185,14 @@ export function getCapabilities(m) {
 export function priceForSort(m) {
   const perM = pricePerMillion(m.pricing?.prompt);
   return perM === null ? Infinity : perM;
+}
+
+// When drafting a diagram, non-image models are still listed (they can help
+// with tag lists / stream tables) but must never sort ahead of image-capable
+// ones on price/context/newest — otherwise a cheap vision-only Gemini looks
+// like the right pick even though it cannot draw.
+export function imageCapableSortKey(m) {
+  return getCapabilities(m).imageGeneration ? 0 : 1;
 }
 
 // Blend context fit + price + capability match into one "Best Match" score,
