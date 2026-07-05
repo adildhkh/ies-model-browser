@@ -9,7 +9,7 @@ import CompareBar from "./components/CompareBar.jsx";
 import CompareModal from "./components/CompareModal.jsx";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
 import {
-  TASK_PROFILES, fmt, fitScore, imageCapableSortKey, matchesSearch,
+  TASK_PROFILES, fmt, fitScore, getCapabilities, matchesSearch,
   priceForSort, taskRequiresImage,
 } from "./utils/models.js";
 
@@ -90,13 +90,12 @@ export default function App() {
   const scoredAndFiltered = useMemo(() => {
     let list = models.filter(m => {
       if ((m.context_length || 0) < effectiveMinCtx) return false;
+      if (requiresImage && !getCapabilities(m).imageGeneration) return false;
       if (favoritesOnly && !favorites.includes(m.id)) return false;
       if (!matchesSearch(m, search)) return false;
       return true;
     });
 
-    // Always score for reasons/warnings — vision-only models must show the
-    // "cannot generate this diagram" warning even when sorted by price, etc.
     list = list.map(m => ({ m, ...fitScore(m, profile, mode) }));
 
     if (sort === "best_match") {
@@ -108,10 +107,6 @@ export default function App() {
       });
     } else {
       list.sort((a, b) => {
-        if (requiresImage) {
-          const imgDiff = imageCapableSortKey(a.m) - imageCapableSortKey(b.m);
-          if (imgDiff !== 0) return imgDiff;
-        }
         if (sort === "price_asc") return priceForSort(a.m) - priceForSort(b.m);
         if (sort === "context_desc") return (b.m.context_length || 0) - (a.m.context_length || 0);
         if (sort === "newest") return (b.m.created || 0) - (a.m.created || 0);
@@ -145,7 +140,7 @@ export default function App() {
           <span>
             Showing <strong>{scoredAndFiltered.length}</strong> of <strong>{models.length}</strong> models · Task: <strong className="accent-text">{task}</strong> · Mode: <strong className="accent-text">{mode === "review" ? "Reviewing" : "Generating"}</strong> · Min context: <strong className="accent-text">{fmt(effectiveMinCtx)}</strong>
             {requiresImage && (
-              <> · <strong className="accent-text">Image output required</strong> — only models with the <strong>Image Output</strong> badge can draft the drawing; <strong>Vision</strong> means read-only</>
+              <> · Showing <strong className="accent-text">image-output models only</strong> — text and vision-only models are hidden for diagram drafting</>
             )}
           </span>
         )}
@@ -171,7 +166,11 @@ export default function App() {
         ))}
         {!loading && scoredAndFiltered.length === 0 && fetched && (
           <div className="model-grid-empty">
-            <EmptyState favoritesOnly={favoritesOnly} onClearFavoritesFilter={() => setFavoritesOnly(false)} />
+            <EmptyState
+              favoritesOnly={favoritesOnly}
+              requiresImage={requiresImage}
+              onClearFavoritesFilter={() => setFavoritesOnly(false)}
+            />
           </div>
         )}
       </div>

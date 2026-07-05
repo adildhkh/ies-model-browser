@@ -187,14 +187,6 @@ export function priceForSort(m) {
   return perM === null ? Infinity : perM;
 }
 
-// When drafting a diagram, non-image models are still listed (they can help
-// with tag lists / stream tables) but must never sort ahead of image-capable
-// ones on price/context/newest — otherwise a cheap vision-only Gemini looks
-// like the right pick even though it cannot draw.
-export function imageCapableSortKey(m) {
-  return getCapabilities(m).imageGeneration ? 0 : 1;
-}
-
 // Blend context fit + price + capability match into one "Best Match" score,
 // weighted per-domain and per-mode (see TASK_PROFILES comment above). Every
 // input is a real API field — this is a ranking heuristic, not a claim about
